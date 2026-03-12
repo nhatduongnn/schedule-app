@@ -1,7 +1,7 @@
 // src/components/Schedule.jsx
 import { useState, useRef } from 'react'
 import { BG_PATTERN } from '../lib/theme'
-import Block from './Block'
+import Block, { parseDurationToMinutes, minutesToDurationStr } from './Block'
 import { jsPDF } from 'jspdf'
 import { deleteSchedule } from '../lib/supabase'
 
@@ -27,40 +27,18 @@ function minutesToTimeStr(mins) {
   return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm
 }
 
-function parseDurationToMinutes(durStr) {
-  if (!durStr) return 60
-  const upper = durStr.toUpperCase()
-  const hrMatch = upper.match(/(\d+\.?\d*)\s*HR/)
-  const minMatch = upper.match(/(\d+)\s*MIN/)
-  let total = 0
-  if (hrMatch) total += parseFloat(hrMatch[1]) * 60
-  if (minMatch) total += parseInt(minMatch[1])
-  return total || 60
-}
-
-function minutesToDurationStr(mins) {
-  if (mins < 60) return mins + ' MIN'
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  if (m === 0) return h + ' HR'
-  return h + 'H ' + m + 'M'
-}
-
 // Recalculate ALL times from scratch starting at fromIndex
-// Uses the time of blocks[fromIndex] as anchor, chains durations forward
 function recalcTimes(blocks, fromIndex) {
   const updated = blocks.map(b => ({ ...b }))
   for (let i = fromIndex + 1; i < updated.length; i++) {
     const prev = updated[i - 1]
     const prevMins = parseTimeToMinutes(prev.time)
     const prevDur = parseDurationToMinutes(prev.duration)
-    updated[i].time = minutesToTimeStr(prevMins + prevDur)
+    updated[i] = { ...updated[i], time: minutesToTimeStr(prevMins + prevDur) }
   }
   return updated
 }
 
-// Normalize initial blocks — recompute all times from block 0 so Gemini
-// inconsistencies are corrected before the schedule is ever displayed
 function normalizeSchedule(blocks) {
   if (!blocks || blocks.length === 0) return blocks
   return recalcTimes(blocks, 0)
@@ -73,7 +51,6 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Drag state
   const dragIndex = useRef(null)
   const dragOverIndex = useRef(null)
 
@@ -91,15 +68,14 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
   }
 
   function handleDurationChange(index, newMins) {
-    const updated = blocks.map((b, i) => i === index
-      ? { ...b, duration: minutesToDurationStr(newMins) }
-      : { ...b }
-    )
-    const recalced = recalcTimes(updated, index)
-    setBlocks(recalced)
+    setBlocks(prev => {
+      const updated = prev.map((b, i) =>
+        i === index ? { ...b, duration: minutesToDurationStr(newMins) } : { ...b }
+      )
+      return recalcTimes(updated, index)
+    })
   }
 
-  // Drag handlers
   function onDragStart(index) {
     dragIndex.current = index
   }
@@ -111,7 +87,6 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
       const dragged = updated.splice(dragIndex.current, 1)[0]
       updated.splice(index, 0, dragged)
       dragIndex.current = index
-      // Recalc all times from the first block after reorder
       return recalcTimes(updated, 0)
     })
   }
@@ -174,12 +149,20 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
       const note = notesMap[block.id]
       if (note) {
         y += 4
+        // Handle checklist JSON in PDF
+        let noteText = note
+        try {
+          const items = JSON.parse(note)
+          if (Array.isArray(items)) {
+            noteText = items.map(it => (it.checked ? '✓ ' : '• ') + it.text).join('\n')
+          }
+        } catch (_) {}
         doc.setFont('helvetica', 'italic')
         doc.setFontSize(9.5)
         doc.setTextColor(100, 80, 60)
-        doc.text('Notes:', margin + 10, y)
+        doc.text('Checklist:', margin + 10, y)
         y += 13
-        const noteLines = doc.splitTextToSize(note, 450)
+        const noteLines = doc.splitTextToSize(noteText, 450)
         doc.text(noteLines, margin + 14, y)
         y += noteLines.length * 13
       }
@@ -219,8 +202,6 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-
-            {/* Edit mode toggle */}
             <button
               onClick={() => setEditMode(e => !e)}
               style={{
@@ -281,7 +262,6 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
             )}
           </div>
 
-          {/* Edit mode hint */}
           {editMode && (
             <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#EDE6DA', fontSize: 12, color: '#8C6E4B', fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em' }}>
               ⠿ Drag blocks to reorder · Tap duration pill to edit minutes · Times auto-adjust
