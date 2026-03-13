@@ -233,7 +233,7 @@ function TransitBlock({ block, index, editMode, isDragging, onDurationChange, on
 export default function Block({
   block, index, scheduleId, initialNote,
   editMode, isDragging,
-  onDurationChange, done, onToggleDone,
+  onDurationChange, onNoteSave, done, onToggleDone,
   onDragStart, onDragEnd,
 }) {
   const [open, setOpen] = useState(false)
@@ -491,6 +491,7 @@ export default function Block({
                 scheduleId={scheduleId}
                 initialContent={initialNote}
                 styles={s}
+                onSave={onNoteSave}
               />
             )}
           </div>

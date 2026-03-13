@@ -20,7 +20,7 @@ function serializeItems(items) {
   return JSON.stringify(items)
 }
 
-export default function NotePanel({ blockId, scheduleId, initialContent = '', styles }) {
+export default function NotePanel({ blockId, scheduleId, initialContent = '', styles, onSave }) {
   const [items, setItems] = useState(() => parseContent(initialContent))
   const [status, setStatus] = useState('idle') // idle | saving | saved | error
   const timer = useRef(null)
@@ -39,6 +39,7 @@ export default function NotePanel({ blockId, scheduleId, initialContent = '', st
       setStatus('saving')
       try {
         await saveNote(scheduleId, blockId, serializeItems(nextItems))
+        onSave?.(serializeItems(nextItems))
         setStatus('saved')
         setTimeout(() => setStatus('idle'), 2000)
       } catch {

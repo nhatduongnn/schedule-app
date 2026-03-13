@@ -44,12 +44,17 @@ function normalizeSchedule(blocks) {
   return recalcTimes(blocks, 0)
 }
 
-export default function Schedule({ date, blocks: initialBlocks, footerNote, scheduleId, notesMap = {}, onNewDay, onDelete }) {
+export default function Schedule({ date, blocks: initialBlocks, footerNote, scheduleId, notesMap: initialNotesMap = {}, onNewDay, onDelete }) {
   const [blocks, setBlocks] = useState(() => normalizeSchedule(initialBlocks || []))
+  const [notesMap, setNotesMap] = useState(initialNotesMap)
   const [editMode, setEditMode] = useState(false)
   const [doneIds, setDoneIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  function handleNoteSave(blockId, content) {
+    setNotesMap(prev => ({ ...prev, [blockId]: content }))
+  }
 
   const dragIndex = useRef(null)
   const dragOverIndex = useRef(null)
@@ -285,6 +290,7 @@ export default function Schedule({ date, blocks: initialBlocks, footerNote, sche
                 editMode={editMode}
                 isDragging={dragIndex.current === i}
                 onDurationChange={(mins) => handleDurationChange(i, mins)}
+                onNoteSave={(content) => handleNoteSave(block.id, content)}
                 done={doneIds.has(block.id)}
                 onToggleDone={() => toggleDone(block.id)}
                 onDragStart={() => onDragStart(i)}
